@@ -9,8 +9,8 @@ import statistics.time_series as ts
 import statistics.model as mod
 import statistics.data_analysis as da
 import statistics.random_variable as ranv
-import finance.technical as tech
-import finance.iex as iex
+import market.iex as iex
+import matplotlib.pyplot as plt
 
 connection = iex.Connection()
 
@@ -24,9 +24,9 @@ class Screener:
         self.length = length
         self.size = len(self.tickers)
         self.encoding_dict = {i: self.tickers[i] for i in range(self.size)}
-        self.series_dict = self.get_series_dict()
+        self.series_dict = self.series_dict()
 
-    def get_series_dict(self):
+    def series_dict(self):
         series_dict = dict()
 
         for ticker in self.tickers:
@@ -36,43 +36,45 @@ class Screener:
 
         return series_dict
 
-    def coint_network(self):
+    def coint_graph(self, alpha):
+        n = self.size
         graph = nx.Graph()
-        for i in range(self.size):
-            for j in range(self.size):
+        for i in range(n):
+            graph.add_node(i, pos=(np.cos(i), np.sin(i)))
+        for i in range(n):
+            for j in range(n):
                 if i < j:
-                    seri = self.encoding_dict[i].values
-                    serj = self.encoding_dict[j].values
-                    if stattools.coint(seri, serj)[1]<.01:
-                        graph.add_edge(i,j)
+                    seri = self.series_dict[self.encoding_dict[i]].values
+                    serj = self.series_dict[self.encoding_dict[j]].values
+                    p = stattools.coint(seri, serj)[1]
+                    if p <= alpha:
+                        graph.add_edge(i,j, weight=p)
 
         return graph
 
-    def trend_dict(self, alpha):
-        """returns the tickers that have a statistically significant
-         trend of the logprices (using ARIMA(1,1,0) model)"""
+    def trend_dict(self, alpha1=.01, alpha2=.01):
+        """returns the tickers that have a significant
+         trend(drift) of the logprices (using ARIMA(1,1,0) model)
+
+         1-alpha1 gives rejection region of H0:no trend
+         1-alph2 gives confidence interval of trend """
 
         trend_dict = dict()
         for ticker in self.tickers:
             ser = self.series_dict[ticker].values
             diff = tools.diff(ser)
-            if stattools.adfuller(ser)[1] > .01:
+            if stattools.adfuller(diff)[1] > .01:
                 continue
 
             mu, sig, n = np.mean(diff), np.std(diff, ddof=1), len(diff)
-            intv = stats.norm.interval(1-alpha, loc=0, scale=sig/np.sqrt(n)
-
-            if mu < intv[0] or mu > intv[1]:
-                trend_dict[ticker] = intv
+            dist0 = stats.norm(loc=0, scale=sig/n)
+            rrc = dist0.interval(1-alpha1)
+            if mu < rrc[0] or mu > rrc[1]:
+                dist1 = stats.norm(loc=mu, scale=sig/n)
+                conf_int = dist1.interval(1-alpha2)
+                trend_dict[ticker] = conf_int
 
         return trend_dict
-
-
-
-
-
-
-
 
     def geometric_dict(self, trend_dict, horizon=20):
         geo_dict = dict()
