@@ -5,11 +5,7 @@ import pandas as pd
 
 class Connection:
     def __init__(self):
-        self._api_url = 'https://api.iextrading.com/1.0'
-
-    @property
-    def api_url(self):
-        return self._api_url
+        self.api_url = 'https://api.iextrading.com/1.0'
 
     #length up to 250
     def get_series(self, ticker, length):
